@@ -1,0 +1,1 @@
+Before running the notebook, please make sure you have `data.csv` and `label.csv` in this folder. These datasets were part of the homework assignment.

@@ -1,6 +1,5 @@
 from torch.utils.data import Dataset
 import torchvision.transforms as transforms
-
 from PIL import Image
 
 import os
@@ -35,13 +34,12 @@ class TumorDataset(Dataset):
         # 1. Transform the data to the form that we need. E.g. use ToTensor to convert the datatype to Tensor
         # 2. Augment the data. E.g. flip and rotation.
 
-        # ToDo 1: You can add more transform into transforms.Compose()
-        # For example, flip and rotation.
-
         self.default_transformation = transforms.Compose([
             transforms.Grayscale(),
             transforms.Resize((512, 512)),
-            transforms.ToTensor()
+            transforms.ToTensor(),
+            transforms.RandomRotation(10),
+            transforms.RandomVerticalFlip(0.5)
         ])
 
     def __getitem__(self, index):
@@ -63,9 +61,9 @@ class TumorDataset(Dataset):
         image = Image.open(image_name)
         mask = Image.open(mask_name)
 
-        # ToDo 2: apply transform to both image and mask
-        image = ...
-        mask = ...
+        # Apply transform to both image and mask
+        image = self.default_transformation(image)
+        mask = self.default_transformation(mask)
 
         sample = {'index': int(index), 'image': image, 'mask': mask}
 
@@ -79,6 +77,7 @@ class TumorDataset(Dataset):
         # ToDo 3: Get the size of the datasets (The number of samples in the dataset.)
         # Hint: The folder we provide contains samples and their mask, which means we have two images for each samples.
         
-        size_of_dataset = ...
+        file_count = len([f for f in os.listdir(self.root_dir) if os.path.isfile(os.path.join(self.root_dir, f))])
+        size_of_dataset = int(file_count / 2)
 
         return size_of_dataset

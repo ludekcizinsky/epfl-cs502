@@ -128,5 +128,4 @@ class BCEDiceLoss(nn.Module):
         self.dice_loss = DiceLoss().to(device)
 
     def forward(self, predicted, target):
-        
         return F.binary_cross_entropy(predicted, target) + self.dice_loss(predicted, target)

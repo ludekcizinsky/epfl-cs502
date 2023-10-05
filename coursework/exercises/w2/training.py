@@ -39,7 +39,7 @@ class Trainer():
 
         # ToDo 1: We choose Adam to be the optimizer.
         # Link to all the optimizers in torch.optim: https://pytorch.org/docs/stable/optim.html
-        self.optimizer = ...
+        self.optimizer = optim.Adam(self.model.parameters(), lr=learning_rate)
         
         # Reducing LR on plateau feature to improve training.
         self.scheduler = optim.lr_scheduler.ReduceLROnPlateau(
@@ -90,20 +90,20 @@ class Trainer():
             mask = data['mask'].to(self.device)
 
             # ToDo 3: Clearing gradients of optimizer.
-            ...
+            self.optimizer.zero_grad()
 
             # ToDo 4: Calculation predicted output using forward pass.
-            output = ...
+            output = self.model.forward(image)
 
             # ToDo 5: Calculating the loss value.
             # Hint: self.criterion
-            loss_value = ...
+            loss_value = self.criterion(output, mask)
 
             # ToDo 6: Computing the gradients.
-            ...
+            loss_value.backward()
 
             # ToDo 7: Optimizing the network parameters.
-            ...
+            self.optimizer.step()
 
             # Updating the running training loss
             epoch_loss += loss_value.item()

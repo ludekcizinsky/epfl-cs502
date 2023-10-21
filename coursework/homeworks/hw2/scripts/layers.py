@@ -1,6 +1,6 @@
 from torch import nn
 import torch
-
+import torch.nn.functional as F
 
 # ---------------- Normal Convolution (Graph Convolution)
 class GraphConv(nn.Module):
@@ -128,11 +128,107 @@ class MaxPoolAggregation(nn.Module):
         return x_agg
 
 # ---------------- Attention-based Convolution
-# TODO: Implement the AttentionConv class
-class GraphAttention(nn.Module):
-    def __ini__(self, in_features, out_features, activation=None):
+class GraphAttentionConv(nn.Module):
+    def __init__(self, in_features, out_features):
         super().__init__()
-        raise NotImplementedError
+        self.activation = nn.LeakyReLU()
+        self.W = nn.Linear(in_features, out_features)
+        self.S = nn.Parameter(torch.randn(2*out_features))
+    
+    def _get_attention_scores(self, adj, X_prime, i):
+        """Computes the attention scores betwee node v and its neighbors.
+        """
+        # Get i-th node's neighbors
+        neighbors = adj[i].nonzero().squeeze(1)  # 1D binary tensor of neighbors
 
-    def forward(self, x, adj):
-        raise NotImplementedError
+        # Add the self-loop
+        neighbors = torch.cat([neighbors, torch.tensor([i])])
+
+        # Get ith node's x_prime
+        x_prime_i = X_prime[i]
+
+        # Get neighbors' x_prime using advanced indexing
+        x_prime_neighbors = X_prime[neighbors]
+
+        # Concatenate the two primed vectors for all neighbors
+        x_prime_concat = torch.cat([x_prime_i.repeat(len(neighbors), 1), x_prime_neighbors], dim=1)
+
+        # Compute raw attention scores for all neighbors
+        raw_attention_scores = torch.matmul(x_prime_concat, self.S)
+
+        # Apply softmax to get the attention weights
+        attention_scores = F.softmax(raw_attention_scores, dim=0)
+
+        return attention_scores
+
+    def forward(self, X, adj):
+        """
+        Perform attention-based graph convolution operation.
+        Args:
+            X (Tensor): Input node features of shape (num_nodes, in_features).
+            adj (Tensor): Adjacency matrix of the graph, shape (num_nodes, num_nodes).
+        Returns:
+            Tensor: Output node features after graph convolution, shape (num_nodes, out_features).
+        """
+
+        # (1) Apply linear transformation
+        X_prime = self.W(X)
+        n_nodes, n_features = X_prime.shape
+
+        X_result = torch.zeros(n_nodes, n_features)
+        for i in range(n_nodes):
+            # Get i-th node's neighbors
+            neighbors = adj[i].nonzero().squeeze(1) # 1D binary tensor of neighbors
+
+            # Add the self-loop
+            neighbors = torch.cat([neighbors, torch.tensor([i])])
+
+            # Get iths node's x_prime
+            x_prime_i = X_prime[i]
+
+            # Compute the attention weights with softmax
+            raw_attention_scores = torch.zeros(len(neighbors))
+            for i, nb in enumerate(neighbors):
+                # Get the neighbor's x_prime
+                x_prime_nb = X_prime[nb]
+
+                # Concat the two primed vectors
+                x_prime_concat = torch.cat([x_prime_i, x_prime_nb])
+
+                # Apply the vector S using dot product
+                e_i_nb = torch.dot(self.S, x_prime_concat)
+
+                # Save the raw attention score
+                raw_attention_scores[i] = e_i_nb
+            
+            # Apply softmax to get the attention weights
+            attention_scores = F.softmax(raw_attention_scores, dim=0)
+
+            # Compute the weighted sum of the neighbors' x_prime
+            for j, nb in enumerate(neighbors):
+                x_prime_nb = X_prime[nb]
+                X_result[i] += attention_scores[j] * x_prime_nb
+            
+            # Finally, apply sigmoid
+            X_result[i] = torch.sigmoid(X_result[i])
+        
+        return X_result
+
+
+# ---------------- Mean Pooling
+class MeanPool(nn.Module):
+    """Mean pooling layer."""
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.mean(0)
+
+# ---------------- Max Pooling
+class MaxPool(nn.Module):
+    """Max pooling layer."""
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x.max(0)[0]

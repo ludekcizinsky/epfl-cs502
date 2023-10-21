@@ -135,20 +135,14 @@ class GraphAttentionConv(nn.Module):
         self.W = nn.Linear(in_features, out_features)
         self.S = nn.Parameter(torch.randn(2*out_features))
     
-    def _get_attention_scores(self, adj, X_prime, i):
+    def _get_attention_scores(self, neighbors, X_prime, i):
         """Computes the attention scores betwee node v and its neighbors.
         """
-        # Get i-th node's neighbors
-        neighbors = adj[i].nonzero().squeeze(1)  # 1D binary tensor of neighbors
-
-        # Add the self-loop
-        neighbors = torch.cat([neighbors, torch.tensor([i])])
-
         # Get ith node's x_prime
-        x_prime_i = X_prime[i]
+        x_prime_i = X_prime[i] # shape (out_features,)
 
         # Get neighbors' x_prime using advanced indexing
-        x_prime_neighbors = X_prime[neighbors]
+        x_prime_neighbors = X_prime[neighbors] # shape (num_neighbors, out_features)
 
         # Concatenate the two primed vectors for all neighbors
         x_prime_concat = torch.cat([x_prime_i.repeat(len(neighbors), 1), x_prime_neighbors], dim=1)
@@ -159,7 +153,10 @@ class GraphAttentionConv(nn.Module):
         # Apply softmax to get the attention weights
         attention_scores = F.softmax(raw_attention_scores, dim=0)
 
-        return attention_scores
+        # Transorm it to a column vector
+        attention_scores = attention_scores.view(-1, 1)
+
+        return attention_scores, x_prime_neighbors
 
     def forward(self, X, adj):
         """
@@ -175,45 +172,24 @@ class GraphAttentionConv(nn.Module):
         X_prime = self.W(X)
         n_nodes, n_features = X_prime.shape
 
+        # (2) Compute the updated node features
         X_result = torch.zeros(n_nodes, n_features)
         for i in range(n_nodes):
-            # Get i-th node's neighbors
-            neighbors = adj[i].nonzero().squeeze(1) # 1D binary tensor of neighbors
 
-            # Add the self-loop
-            neighbors = torch.cat([neighbors, torch.tensor([i])])
+            # (2a) Get i-th node's neighbors
+            neighbors = adj[i].nonzero().squeeze(1)  # 1D binary tensor of neighbors
+            neighbors = torch.cat([neighbors, torch.tensor([i])]) # add self-loop
 
-            # Get iths node's x_prime
-            x_prime_i = X_prime[i]
+            # (2b) Compute the attention scores
+            attention_scores, x_prime_neighbors = self._get_attention_scores(neighbors, X_prime, i)
 
-            # Compute the attention weights with softmax
-            raw_attention_scores = torch.zeros(len(neighbors))
-            for i, nb in enumerate(neighbors):
-                # Get the neighbor's x_prime
-                x_prime_nb = X_prime[nb]
-
-                # Concat the two primed vectors
-                x_prime_concat = torch.cat([x_prime_i, x_prime_nb])
-
-                # Apply the vector S using dot product
-                e_i_nb = torch.dot(self.S, x_prime_concat)
-
-                # Save the raw attention score
-                raw_attention_scores[i] = e_i_nb
+            # (2c) Compute the weighted sum of the neighbors' x_prime
+            weighted_sum = torch.matmul(x_prime_neighbors.T, attention_scores).squeeze(1)
             
-            # Apply softmax to get the attention weights
-            attention_scores = F.softmax(raw_attention_scores, dim=0)
-
-            # Compute the weighted sum of the neighbors' x_prime
-            for j, nb in enumerate(neighbors):
-                x_prime_nb = X_prime[nb]
-                X_result[i] += attention_scores[j] * x_prime_nb
-            
-            # Finally, apply sigmoid
-            X_result[i] = torch.sigmoid(X_result[i])
+            # (2d) Finally, apply sigmoid
+            X_result[i] = torch.sigmoid(weighted_sum)
         
         return X_result
-
 
 # ---------------- Mean Pooling
 class MeanPool(nn.Module):

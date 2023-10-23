@@ -28,11 +28,11 @@ class GraphDataset(Dataset):
         graph['num_nodes'] = unparsed_graph["num_nodes"]
 
         # Node and edge features
-        graph['node_features'] = torch.tensor(unparsed_graph["node_feat"])
-        graph['edge_features'] = torch.tensor(unparsed_graph["edge_attr"])
+        graph['node_features'] = torch.tensor(unparsed_graph["node_feat"], dtype=torch.double)
+        graph['edge_features'] = torch.tensor(unparsed_graph["edge_attr"], dtype=torch.double)
 
         # Adjacency matrix
-        adj = torch.zeros((graph['num_nodes'], graph['num_nodes']))
+        adj = torch.zeros((graph['num_nodes'], graph['num_nodes']), dtype=torch.double)
         row_indices, column_indices = unparsed_graph["edge_index"]
         adj[row_indices, column_indices] = 1
         graph['adj'] = adj

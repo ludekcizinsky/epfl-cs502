@@ -131,32 +131,8 @@ class MaxPoolAggregation(nn.Module):
 class GraphAttentionConv(nn.Module):
     def __init__(self, in_features, out_features):
         super().__init__()
-        self.activation = nn.LeakyReLU()
         self.W = nn.Linear(in_features, out_features)
         self.S = nn.Parameter(torch.randn(2*out_features))
-    
-    def _get_attention_scores(self, neighbors, X_prime, i):
-        """Computes the attention scores betwee node v and its neighbors.
-        """
-        # Get ith node's x_prime
-        x_prime_i = X_prime[i] # shape (out_features,)
-
-        # Get neighbors' x_prime using advanced indexing
-        x_prime_neighbors = X_prime[neighbors] # shape (num_neighbors, out_features)
-
-        # Concatenate the two primed vectors for all neighbors
-        x_prime_concat = torch.cat([x_prime_i.repeat(len(neighbors), 1), x_prime_neighbors], dim=1)
-
-        # Compute raw attention scores for all neighbors
-        raw_attention_scores = torch.matmul(x_prime_concat, self.S)
-
-        # Apply softmax to get the attention weights
-        attention_scores = F.softmax(raw_attention_scores, dim=0)
-
-        # Transorm it to a column vector
-        attention_scores = attention_scores.view(-1, 1)
-
-        return attention_scores, x_prime_neighbors
 
     def forward(self, X, adj):
         """
@@ -172,21 +148,35 @@ class GraphAttentionConv(nn.Module):
         X_prime = self.W(X)
         n_nodes, n_features = X_prime.shape
 
-        # (2) Compute the updated node features
-        X_result = torch.zeros(n_nodes, n_features)
+        X_result = torch.zeros(n_nodes, n_features, dtype=torch.double)
         for i in range(n_nodes):
+            # Get i-th node's neighbors
+            neighbors = adj[i].nonzero().squeeze(1) # 1D binary tensor of neighbors
 
-            # (2a) Get i-th node's neighbors
-            neighbors = adj[i].nonzero().squeeze(1)  # 1D binary tensor of neighbors
-            neighbors = torch.cat([neighbors, torch.tensor([i])]) # add self-loop
+            # Add the self-loop
+            neighbors = torch.cat([neighbors, torch.tensor([i])])
 
-            # (2b) Compute the attention scores
-            attention_scores, x_prime_neighbors = self._get_attention_scores(neighbors, X_prime, i)
+            # Get iths node's x_prime
+            x_prime_i = X_prime[i]
 
-            # (2c) Compute the weighted sum of the neighbors' x_prime
-            weighted_sum = torch.matmul(x_prime_neighbors.T, attention_scores).squeeze(1)
+            # Compute the attention weights with softmax
+            x_prime_neighbors = X_prime[neighbors]
+            x_prime_concat_all = torch.cat([x_prime_i.repeat(len(neighbors), 1), x_prime_neighbors], dim=1)
+            # Faster way to compute the attention vector: e_i_nb2 = x_prime_concat_all @ self.S
+            e_i_nb = torch.zeros(len(neighbors), dtype=torch.double)
+            for i, x_prime_concat in enumerate(x_prime_concat_all):
+                e_i_nb[i] = torch.dot(self.S, x_prime_concat)
             
-            # (2d) Finally, apply sigmoid
+            # For comparison of the two ways of computing things: print(torch.allclose(e_i_nb, e_i_nb2))
+            raw_attention_scores = F.leaky_relu_(e_i_nb)
+
+            # Apply softmax to get the attention weights
+            attention_scores = F.softmax(raw_attention_scores, dim=0)
+
+            # Compute the weighted sum of the neighbors' x_prime
+            weighted_sum = torch.matmul(x_prime_neighbors.T, attention_scores)
+            
+            # Finally, apply sigmoid
             X_result[i] = torch.sigmoid(weighted_sum)
         
         return X_result

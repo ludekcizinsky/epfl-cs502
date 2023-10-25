@@ -1,0 +1,1 @@
+{"Train Loss": NaN, "Train F1 (macro)": 0.24050632911392406, "Validation Loss": NaN, "Validation F1 (macro)": 0.3023255813953488, "_timestamp": 1698228292.2539892, "_runtime": 57.44826126098633, "_step": 199, "_wandb": {"runtime": 96}}

@@ -1,10 +1,21 @@
-from torch import nn
+"""Module implementing the various graph convolutional layers. Namely:
+    - (1) Normal graph convolution
+    - (2) GraphSAGE convolution (with Mean aggregation)
+    - (3) Attention-based graph convolution
+Finally, the following pooling layers are implemented:
+    - (4) Mean pooling
+    - (5) Max pooling
+"""
+
+# ---------------- Import libraries and/or modules
 import torch
+from torch import nn
 import torch.nn.functional as F
 
 # ---------------- Normal Convolution (Graph Convolution)
 class GraphConv(nn.Module):
-    """Basic graph convolutional layer implementing the simple neighborhood aggregation."""
+    """Simple graph convolutional layer implementing the simple neighborhood aggregation. 
+    """
 
     def __init__(self, in_features, out_features, activation=None):
         """
@@ -15,27 +26,35 @@ class GraphConv(nn.Module):
             out_features (int): number of output node features.
             activation (nn.Module or callable): activation function to apply. (optional)
         """
+        # Initialize the parent class
         super().__init__()
+
+        # Save the activation function
         self.activation = activation
+
+        # Initialize the tunable parameters W and B of the layer
+        # Note: weights are initialized with Glorot initialization
+        # to prevent the gradient from vanishing or exploding
         self.W = nn.Linear(in_features, out_features, bias=False)
         self.B = nn.Linear(in_features, out_features, bias=False)
 
-    def forward(self, x, adj):
+    def forward(self, X, adj):
         """
         Perform graph convolution operation.
 
         Args:
-            x (Tensor): Input node features of shape (num_nodes, in_features).
-            adj (Tensor): Adjacency matrix of the graph, shape (num_nodes, num_nodes).
+            X (Tensor): Input node features of shape (num_nodes, in_features).
+            adj (Tensor): Adjacency matrix of the graph of shape (num_nodes, num_nodes).
 
         Returns:
-            Tensor: Output node features after graph convolution, shape (num_nodes, out_features).
+            result (Tensor): Output node features after graph convolution of shape (num_nodes, out_features).
         """
         # Normalise the adjacency matrix
+        # Note: we use clamp to avoid division by zero
         adj = adj / adj.sum(1, keepdims=True).clamp(min=1)        
  
         # Compute the result
-        result = self.W(adj @ x) + self.B(x)
+        result = self.W(adj @ X) + self.B(X)
         
         # Apply activation if neccessary
         if self.activation is not None:
@@ -45,7 +64,8 @@ class GraphConv(nn.Module):
 
 # ---------------- GraphSAGE Convolution
 class GraphSAGEConv(nn.Module):
-    """GraphSAGE convolutional layer."""
+    """Implementation of the GraphSAGE convolutional layer which uses a user-specified aggregation function
+    to aggregate the node features of the neighborhood."""
     
     def __init__(self, in_features, out_features, aggregation, activation=None):
         """
@@ -54,158 +74,165 @@ class GraphSAGEConv(nn.Module):
         Args:
             in_features (int): number of input node features.
             out_features (int): number of output node features.
-            aggregation (nn.Module or callable): aggregation function to apply, as x_agg = aggegration(x, adj).
+            aggregation (nn.Module or callable): aggregation function to apply, ex. x_agg = aggegration(x, adj).
             activation (nn.Module or callable): activation function to apply. (optional)
         """
+        # Initialize the parent class
         super().__init__()
+
+        # Save the aggregation and activation functions
         self.aggregation = aggregation
         self.activation = activation
+        
+        # Initialize the tunable parameter W of the layer
+        # Note: weights are initialized with Glorot initialization
+        # to prevent the gradient from vanishing or exploding
         self.W = nn.Linear(2*in_features, out_features, bias=False)
 
-    def forward(self, x, adj):
+    def forward(self, X, adj):
         """
         Perform graph convolution operation.
 
         Args:
-            x (Tensor): Input node features of shape (num_nodes, in_features).
-            adj (Tensor): Adjacency matrix of the graph, typically sparse, shape (num_nodes, num_nodes).
+            X (Tensor): Input node features of shape (num_nodes, in_features).
+            adj (Tensor): Adjacency matrix of the graph, typically sparse of shape (num_nodes, num_nodes).
 
         Returns:
-            Tensor: Output node features after graph convolution, shape (num_nodes, out_features).
+            result (Tensor): Output node features after graph convolution of shape (num_nodes, out_features).
         """
-        aggregated = torch.cat([x, self.aggregation(x, adj)], dim=1)
-        return self.activation(self.W(aggregated)) if self.activation is not None else self.W(aggregated)
+        # Aggregate the node features of the neighborhood
+        nb_agg = self.aggregation(X, adj)
 
-# ---------------- GraphSAGE Aggregation
+        # Concatenate the aggregated neighborhood node features 
+        # with the target node features
+        X_with_nb_agg = torch.cat([X, nb_agg], dim=1)
+
+        # Transform the concatenated features using linear transformation
+        result = self.W(X_with_nb_agg)
+
+        # Apply activation if neccessary
+        if self.activation is not None:
+            result = self.activation(result)
+
+        return result
+
 class MeanAggregation(nn.Module):
     """Aggregate node features by averaging over the neighborhood."""
     def __init__(self):
         super().__init__()
 
-    def forward(self, x, adj):
-        x_agg = (adj @ x) / adj.sum(1, keepdims=True).clamp(min=1)
-        return x_agg
+    def forward(self, X, adj):
+        """
+        Aggregate node features by averaging over the neighborhood.
+        Args:
+            X (Tensor): Input node features of shape (num_nodes, in_features).
+            adj (Tensor): Adjacency matrix of the graph of shape (num_nodes, num_nodes).
+        Returns:
+            result (Tensor): Aggregated node features of shape (num_nodes, in_features).
+        """
+        # Compute the degree of each node
+        # If the degree is zero, set it to one to avoid division by zero
+        deg = adj.sum(1, keepdims=True).clamp(min=1)
+
+        # Normalize the adjacency matrix using the degree
+        # E.g. if adj[i, j] = 1, then adj[i, j] = 1 / deg[i]
+        adj_norm = adj / deg
+
+        # Finally, aggregate the node features by averaging over the neighborhood
+        result = adj_norm @ X
+
+        return result
     
-class SumAggregation(nn.Module):
-    """Aggregate node features by summing over the neighborhood."""
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, adj):
-        x_agg = adj @ x
-        return x_agg
-
-class SqrtDegAggregation(nn.Module):
-    """Aggregate node features by summing over the neighborhood and normalizing by the degrees."""
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, adj):
-        x_agg = (adj @ x) / adj.sum(1, keepdims=True).clamp(min=1).sqrt()
-        return x_agg
-    
-class MaxPoolAggregation(nn.Module):
-    """
-    Aggregate node features by taking the maximum over the transformed neighborhood.
-
-    Note: this is complicated to implement in pure PyTorch, so we will do a naive loop.
-    """
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, x, adj):
-        # Initialize the aggregated node embedding
-        # with zeros since if the node has no neighbors
-        # we want to aggregate a zero vector
-        x_agg = torch.zeros_like(x)
-        n = adj.shape[0]
-        for i in range(n):
-            # Get 1D tensor of neighbors
-            neighbors = adj[i].nonzero().squeeze(1)
-            # Aggregate (if the node has neighbors)
-            if neighbors.numel() > 0:
-                x_agg[i] = x[neighbors].max(0)[0]
-        return x_agg
-
 # ---------------- Attention-based Convolution
 class GraphAttentionConv(nn.Module):
-    def __init__(self, in_features, out_features):
-        super().__init__()
-        self.W = nn.Linear(in_features, out_features)
-        self.S = nn.Parameter(torch.randn(2*out_features))
+    """Implementation of the Graph Attention convolutional layer
+    which uses an attention mechanism to aggregate the node features of the neighborhood.
 
-    def forward2(self, X, adj):
-        """
-        Perform attention-based graph convolution operation.
+    Attention mechanism:
+        - Compute attention scores for each neighbor
+        - Apply softmax to get the attention weights
+        - Compute the weighted sum of the given vector's neighbors
+    """
+    def __init__(self, in_features, out_features):
+        # Initialize the parent class
+        super().__init__()
+
+        # Initialize the tunable parameter W and S of the layer
+        # Note 1: weights are initialized with Glorot initialization
+        # Note 2: S is a vector of size 2*out_features since
+        # we concatenate the target node's features with the neighbor's features
+        # and then we compute the dot product between S and the concat. vector
+        self.W = nn.Linear(in_features, out_features)
+        self.S = nn.Parameter(torch.randn(2*out_features, dtype=torch.double)).unsqueeze(1) # Make it column vector
+
+    def forward(self, X, adj):
+        """Perform attention-based graph convolution operation.
+
         Args:
             X (Tensor): Input node features of shape (num_nodes, in_features).
             adj (Tensor): Adjacency matrix of the graph, shape (num_nodes, num_nodes).
-        Returns:
-            Tensor: Output node features after graph convolution, shape (num_nodes, out_features).
         """
-
-        # (1) Apply linear transformation
+        # (1) Apply linear transformation on the input node features
         X_prime = self.W(X)
-        n_nodes, n_features = X_prime.shape
 
-        X_result = torch.zeros(n_nodes, n_features, dtype=torch.double)
-        for i in range(n_nodes):
-            # Get i-th node's neighbors
-            neighbors = adj[i].nonzero().squeeze(1) # 1D binary tensor of neighbors
+        # Compute the number of nodes
+        n_nodes, _ = X_prime.shape
 
-            # Add the self-loop
-            neighbors = torch.cat([neighbors, torch.tensor([i])])
+        # Add self loop to adjaceny matrix
+        adj = adj + torch.eye(n_nodes, dtype=torch.double)
 
-            # Get iths node's x_prime
-            x_prime_i = X_prime[i]
+        # (2) Compute attention scores for each neighbor
+        # (2a) Get all edges
+        # E.g. if adj[i, j] = 1, then nbs will have an entry (i, j)
+        # as well as (j, i) since the graph is undirected
+        nbs = adj.nonzero() # of shape (2*num_edges, 2)
+        i, j = nbs[:, 0], nbs[:, 1]
 
-            # Compute the attention weights with softmax
-            x_prime_neighbors = X_prime[neighbors]
-            x_prime_concat_all = torch.cat([x_prime_i.repeat(len(neighbors), 1), x_prime_neighbors], dim=1)
-            # Faster way to compute the attention vector: e_i_nb2 = x_prime_concat_all @ self.S
-            e_i_nb = torch.zeros(len(neighbors), dtype=torch.double)
-            for i, x_prime_concat in enumerate(x_prime_concat_all):
-                e_i_nb[i] = torch.dot(self.S, x_prime_concat)
-            
-            # For comparison of the two ways of computing things: print(torch.allclose(e_i_nb, e_i_nb2))
-            raw_attention_scores = F.leaky_relu_(e_i_nb)
+        # (2b) Concatenate each vector's v transformed features
+        # with its neightbors' transformed features
+        # E.g. if X_prime[i] = [1, 2] and X_prime[j] = [3, 4]
+        # then x_prime_concat_all will include [[1, 2, 3, 4], [3, 4, 1, 2]]
+        X_prime_i = X_prime[i] # Target vectors (vs)
+        X_prime_j = X_prime[j] # Neighbor vectors (vnb)
+        X_prime_concat_all = torch.cat([X_prime_i, X_prime_j], dim=1) # Shape: (2*num_edges, 2*out_features)
 
-            # Apply softmax to get the attention weights
-            attention_scores = F.softmax(raw_attention_scores, dim=0)
+        # (2c) Compute the dot product between S and the concat. vector
+        # of target vector i and its neighbor j (nb)
+        # Note: (2*num_edges, 2*out_features) @ (2*out_features, 1) = (2*num_edges, 1)
+        # --> squeeze result to get a 1D tensor of shape (2*num_edges, )
+        E_i_nb = (X_prime_concat_all @ self.S).squeeze()
 
-            # Compute the weighted sum of the neighbors' x_prime
-            weighted_sum = torch.matmul(x_prime_neighbors.T, attention_scores)
-            
-            # Finally, apply sigmoid
-            X_result[i] = torch.sigmoid(weighted_sum)
-        
-        return X_result
+        # Apply leaky relu to get the raw attention scores
+        raw_attention_scores = F.leaky_relu(E_i_nb)
 
-    def forward(self, X, adj):
-        X_prime = self.W(X)
-        n_nodes, n_features = X_prime.shape
+        # (2d) Finally, apply the softmax function to get the attention weights
+        # Map the values to positive range using exponential function
+        exp_attention_scores = torch.exp(raw_attention_scores)
 
-        # Get the neighbors for all nodes in a single operation
-        neighbors = adj.nonzero()  # Get all non-zero elements (neighbor relationships)
-        i, j = neighbors[:, 0], neighbors[:, 1]
+        # Create an array to hold the sum of exp. attention scores for each node
+        # (i.e. the total attention of the node's neighborhood)
+        neighborhood_sum = torch.zeros(n_nodes, dtype=torch.double)
 
-        # Create a batch of node pairs (i, j) for computation
-        x_prime_i = X_prime[i]
-        x_prime_j = X_prime[j]
+        # Sum the exp. attention scores for each node's neighborhood
+        # Note:
+        # 0 indicates dimnesion, here we just have one dimension so 0
+        # i indicates the index of the node from edge (i, j)
+        neighborhood_sum.index_add_(0, i, exp_attention_scores)
 
-        # Concatenate features and compute attention scores
-        x_prime_concat_all = torch.cat([x_prime_i, x_prime_j], dim=1)
-        e_i_nb = torch.mm(x_prime_concat_all, self.S.view(-1, 1)).squeeze()
+        # Divide the exponential scores by the sum of the neighborhood
+        attention_scores = exp_attention_scores / neighborhood_sum[i]
 
-        # For comparison of the two ways of computing things: print(torch.allclose(e_i_nb, e_i_nb2))
-        raw_attention_scores = F.leaky_relu(e_i_nb)
-        attention_scores = F.softmax(raw_attention_scores, dim=0).to(torch.double)
+        # (3) Compute the weighted sum of the neighbors'
+        # Create summation mask of shape (# of nodes, 2*# of edges)
+        # In simple terms, the mask indicates which edges is the given node i
+        # associated with. E.g. if mask[i, j] = 1, then edge (i, j) is associated.
+        mask = (i.view(-1, 1) == torch.arange(n_nodes)).T.to(torch.double)
 
-        # Use a mask to differentiate nodes for summation (ensure mask has double data type)
-        mask = (i.view(-1, 1) == torch.arange(n_nodes)).to(torch.double)
+        # Weight the neighbors' features by the attention scores
+        nbs_feat_weighted = attention_scores.view(-1, 1) * X_prime_j
 
         # Compute the weighted sum of the neighbors' x_prime
-        weighted_sum = torch.mm(mask.t(), attention_scores.view(-1, 1) * x_prime_j)
+        weighted_sum = mask @ nbs_feat_weighted
 
         # Finally, apply sigmoid
         X_result = torch.sigmoid(weighted_sum)

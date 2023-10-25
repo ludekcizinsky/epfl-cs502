@@ -1,0 +1,72 @@
+wandb_version: 1
+
+learning_rate:
+  desc: null
+  value: 0.01
+architecture:
+  desc: null
+  value: Graph Attention Convolutional Network - 3 layers
+dataset:
+  desc: null
+  value: MUTAG
+epochs:
+  desc: null
+  value: 20
+batch_size:
+  desc: null
+  value: 30
+optimizer:
+  desc: null
+  value: "Adam (\nParameter Group 0\n    amsgrad: False\n    betas: (0.9, 0.999)\n\
+    \    capturable: False\n    differentiable: False\n    eps: 1e-08\n    foreach:\
+    \ None\n    fused: None\n    lr: 0.01\n    maximize: False\n    weight_decay:\
+    \ 1e-05\n)"
+shuffle:
+  desc: null
+  value: true
+activation:
+  desc: null
+  value: LeakyReLU(negative_slope=0.01)
+pooling:
+  desc: null
+  value: MeanPool()
+aggregation:
+  desc: null
+  value: SumAggregation()
+dropout:
+  desc: null
+  value: 0.1
+_wandb:
+  desc: null
+  value:
+    python_version: 3.9.18
+    cli_version: 0.15.12
+    framework: torch
+    is_jupyter_run: true
+    is_kaggle_kernel: false
+    start_time: 1698076637.861477
+    t:
+      1:
+      - 1
+      - 5
+      - 49
+      - 51
+      - 53
+      - 55
+      2:
+      - 1
+      - 5
+      - 49
+      - 51
+      - 53
+      - 55
+      3:
+      - 1
+      - 16
+      - 23
+      4: 3.9.18
+      5: 0.15.12
+      8:
+      - 1
+      - 5
+      13: darwin-x86_64

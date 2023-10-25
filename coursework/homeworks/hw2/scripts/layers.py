@@ -134,7 +134,7 @@ class GraphAttentionConv(nn.Module):
         self.W = nn.Linear(in_features, out_features)
         self.S = nn.Parameter(torch.randn(2*out_features))
 
-    def forward(self, X, adj):
+    def forward2(self, X, adj):
         """
         Perform attention-based graph convolution operation.
         Args:
@@ -180,6 +180,38 @@ class GraphAttentionConv(nn.Module):
             X_result[i] = torch.sigmoid(weighted_sum)
         
         return X_result
+
+    def forward(self, X, adj):
+        X_prime = self.W(X)
+        n_nodes, n_features = X_prime.shape
+
+        # Get the neighbors for all nodes in a single operation
+        neighbors = adj.nonzero()  # Get all non-zero elements (neighbor relationships)
+        i, j = neighbors[:, 0], neighbors[:, 1]
+
+        # Create a batch of node pairs (i, j) for computation
+        x_prime_i = X_prime[i]
+        x_prime_j = X_prime[j]
+
+        # Concatenate features and compute attention scores
+        x_prime_concat_all = torch.cat([x_prime_i, x_prime_j], dim=1)
+        e_i_nb = torch.mm(x_prime_concat_all, self.S.view(-1, 1)).squeeze()
+
+        # For comparison of the two ways of computing things: print(torch.allclose(e_i_nb, e_i_nb2))
+        raw_attention_scores = F.leaky_relu(e_i_nb)
+        attention_scores = F.softmax(raw_attention_scores, dim=0).to(torch.double)
+
+        # Use a mask to differentiate nodes for summation (ensure mask has double data type)
+        mask = (i.view(-1, 1) == torch.arange(n_nodes)).to(torch.double)
+
+        # Compute the weighted sum of the neighbors' x_prime
+        weighted_sum = torch.mm(mask.t(), attention_scores.view(-1, 1) * x_prime_j)
+
+        # Finally, apply sigmoid
+        X_result = torch.sigmoid(weighted_sum)
+
+        return X_result
+
 
 # ---------------- Mean Pooling
 class MeanPool(nn.Module):

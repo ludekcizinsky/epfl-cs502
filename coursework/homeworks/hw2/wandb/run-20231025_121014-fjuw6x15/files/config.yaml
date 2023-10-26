@@ -23,7 +23,7 @@ optimizer:
     \ 1e-06\n)"
 shuffle:
   desc: null
-  value: true
+  value: false
 activation:
   desc: null
   value: LeakyReLU(negative_slope=0.01)
@@ -50,7 +50,7 @@ _wandb:
     framework: torch
     is_jupyter_run: true
     is_kaggle_kernel: false
-    start_time: 1698228421.831052
+    start_time: 1698228622.962767
     t:
       1:
       - 1

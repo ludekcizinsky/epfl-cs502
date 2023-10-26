@@ -2,7 +2,7 @@ wandb_version: 1
 
 learning_rate:
   desc: null
-  value: 0.01
+  value: 0.001
 architecture:
   desc: null
   value: Graph Attention Convolutional Network - 2 layers
@@ -14,16 +14,16 @@ epochs:
   value: 200
 batch_size:
   desc: null
-  value: 32
+  value: 64
 optimizer:
   desc: null
   value: "Adam (\nParameter Group 0\n    amsgrad: False\n    betas: (0.9, 0.999)\n\
     \    capturable: False\n    differentiable: False\n    eps: 1e-08\n    foreach:\
-    \ None\n    fused: None\n    lr: 0.01\n    maximize: False\n    weight_decay:\
+    \ None\n    fused: None\n    lr: 0.001\n    maximize: False\n    weight_decay:\
     \ 1e-06\n)"
 shuffle:
   desc: null
-  value: true
+  value: false
 activation:
   desc: null
   value: LeakyReLU(negative_slope=0.01)
@@ -35,13 +35,13 @@ aggregation:
   value: MeanAggregation()
 dropout:
   desc: null
-  value: 0.0
+  value: 0.1
 weight_decay:
   desc: null
   value: 1.0e-06
 pos_weight:
   desc: null
-  value: 0.6
+  value: 0.7
 _wandb:
   desc: null
   value:
@@ -50,7 +50,7 @@ _wandb:
     framework: torch
     is_jupyter_run: true
     is_kaggle_kernel: false
-    start_time: 1698228421.831052
+    start_time: 1698229733.572357
     t:
       1:
       - 1

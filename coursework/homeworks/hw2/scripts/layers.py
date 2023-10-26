@@ -153,9 +153,12 @@ class GraphAttentionConv(nn.Module):
         - Apply softmax to get the attention weights
         - Compute the weighted sum of the given vector's neighbors
     """
-    def __init__(self, in_features, out_features):
+    def __init__(self, in_features, out_features, softmax_global=False):
         # Initialize the parent class
         super().__init__()
+
+        # Save the softmax_global flag
+        self.softmax_global = softmax_global
 
         # Initialize the tunable parameter W and S of the layer
         # Note 1: weights are initialized with Glorot initialization
@@ -205,22 +208,27 @@ class GraphAttentionConv(nn.Module):
         # Apply leaky relu to get the raw attention scores
         raw_attention_scores = F.leaky_relu(E_i_nb)
 
+
         # (2d) Finally, apply the softmax function to get the attention weights
-        # Map the values to positive range using exponential function
-        exp_attention_scores = torch.exp(raw_attention_scores)
+        if self.softmax_global:
+            # Apply softmax globally
+            attention_scores = F.softmax(raw_attention_scores, dim=0)
+        else:
+            # Map the values to positive range using exponential function
+            exp_attention_scores = torch.exp(raw_attention_scores)
 
-        # Create an array to hold the sum of exp. attention scores for each node
-        # (i.e. the total attention of the node's neighborhood)
-        neighborhood_sum = torch.zeros(n_nodes, dtype=torch.double)
+            # Create an array to hold the sum of exp. attention scores for each node
+            # (i.e. the total attention of the node's neighborhood)
+            neighborhood_sum = torch.zeros(n_nodes, dtype=torch.double)
 
-        # Sum the exp. attention scores for each node's neighborhood
-        # Note:
-        # 0 indicates dimnesion, here we just have one dimension so 0
-        # i indicates the index of the node from edge (i, j)
-        neighborhood_sum.index_add_(0, i, exp_attention_scores)
+            # Sum the exp. attention scores for each node's neighborhood
+            # Note:
+            # 0 indicates dimnesion, here we just have one dimension so 0
+            # i indicates the index of the node from edge (i, j)
+            neighborhood_sum.index_add_(0, i, exp_attention_scores)
 
-        # Divide the exponential scores by the sum of the neighborhood
-        attention_scores = exp_attention_scores / neighborhood_sum[i]
+            # Divide the exponential scores by the sum of the neighborhood
+            attention_scores = exp_attention_scores / neighborhood_sum[i]
 
         # (3) Compute the weighted sum of the neighbors'
         # Create summation mask of shape (# of nodes, 2*# of edges)

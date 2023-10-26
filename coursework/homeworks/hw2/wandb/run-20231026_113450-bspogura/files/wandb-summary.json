@@ -1,0 +1,1 @@
+{"Train Loss": 1.8311862349510193, "Train F1 (macro)": 0.40454545454545454, "Validation Loss": 0.6142991781234741, "Validation F1 (macro)": 0.3777777777777777, "_timestamp": 1698312927.225363, "_runtime": 30.945921897888184, "_step": 149, "_wandb": {"runtime": 29}}

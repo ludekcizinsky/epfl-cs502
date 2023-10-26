@@ -61,6 +61,11 @@ class GraphConv(nn.Module):
             result = self.activation(result)
                 
         return result
+    
+    def __str__(self):
+        """Return the name of the layer."""
+        act_name = str(self.activation) if self.activation is not None else "None"
+        return f"GraphConv (act: {act_name})"
 
 # ---------------- GraphSAGE Convolution
 class GraphSAGEConv(nn.Module):
@@ -115,6 +120,12 @@ class GraphSAGEConv(nn.Module):
             result = self.activation(result)
 
         return result
+    
+    def __str__(self):
+        """Return the name of the layer."""
+        agg_name = str(self.aggregation) if self.aggregation is not None else "None"
+        act_name = str(self.activation) if self.activation is not None else "None"
+        return f"GraphSAGEConv (act: {act_name}, agg: {agg_name}))"
 
 class MeanAggregation(nn.Module):
     """Aggregate node features by averaging over the neighborhood."""
@@ -142,6 +153,10 @@ class MeanAggregation(nn.Module):
         result = adj_norm @ X
 
         return result
+
+    def __str__(self):
+        """Return the name of the aggregation function."""
+        return "MeanAggregation"
     
 # ---------------- Attention-based Convolution
 class GraphAttentionConv(nn.Module):
@@ -246,16 +261,26 @@ class GraphAttentionConv(nn.Module):
         X_result = torch.sigmoid(weighted_sum)
 
         return X_result
+    
+    def __str__(self):
+        """Return the name of the layer."""
+        return f"GraphAttentionConv (global softmax: {self.softmax_global})"
 
 
 # ---------------- Mean Pooling
 class MeanPool(nn.Module):
     """Mean pooling layer."""
     def __init__(self):
+        # Initialize the parent class
         super().__init__()
 
     def forward(self, x):
+        """Perform mean pooling operation."""
         return x.mean(0)
+    
+    def __str__(self):
+        """Return the name of the layer."""
+        return "MeanPool"
 
 # ---------------- Max Pooling
 class MaxPool(nn.Module):
@@ -264,4 +289,9 @@ class MaxPool(nn.Module):
         super().__init__()
 
     def forward(self, x):
+        """Perform max pooling operation."""
         return x.max(0)[0]
+    
+    def __str__(self):
+        """Return the name of the layer."""
+        return "MaxPool"

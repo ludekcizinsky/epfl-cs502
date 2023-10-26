@@ -1,0 +1,44 @@
+{
+    "os": "macOS-10.16-x86_64-i386-64bit",
+    "python": "3.9.18",
+    "heartbeatAt": "2023-10-26T09:16:30.218629",
+    "startedAt": "2023-10-26T09:16:19.620865",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "run.ipynb",
+    "codePathLocal": "run.ipynb",
+    "git": {
+        "remote": "git@github.com:ludekcizinsky/epfl-cs502.git",
+        "commit": "3be12c5a509e535436face5cdc17f54ebd415834"
+    },
+    "email": "ludekcizinsky11@gmail.com",
+    "root": "/Users/ludekcizinsky/Dev/personal/epfl-cs502",
+    "host": "localhost",
+    "username": "ludekcizinsky",
+    "executable": "/Users/ludekcizinsky/miniconda3/envs/cs502/bin/python",
+    "cpu_count": 4,
+    "cpu_count_logical": 8,
+    "cpu_freq": {
+        "current": 2000,
+        "min": 2000,
+        "max": 2000
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2000,
+            "min": 2000,
+            "max": 2000
+        }
+    ],
+    "disk": {
+        "/": {
+            "total": 465.62699127197266,
+            "used": 388.9516792297363
+        }
+    },
+    "memory": {
+        "total": 16.0
+    }
+}

@@ -47,6 +47,9 @@ class GraphDataset(Dataset):
         adj[row_indices, column_indices] = 1
         graph['adj'] = adj
 
+        # Edge index
+        graph['edge_index'] = torch.tensor(unparsed_graph["edge_index"], dtype=torch.long).T
+
         return graph
 
     def __getitem__(self, idx):

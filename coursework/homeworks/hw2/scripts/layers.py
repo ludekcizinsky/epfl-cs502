@@ -368,3 +368,61 @@ class MaxPool(nn.Module):
     def __str__(self):
         """Return the name of the layer."""
         return "MaxPool"
+
+
+# ---------------- GraphSumEdgeConv
+class GraphSumEdgeConv(nn.Module):
+    """Transforms the edge features and adds the sum of the neighborhood 
+    edge features to the corespoinding node features.
+    """
+
+    def __init__(self, in_features, out_features, activation=None):
+        # Initialize the parent class
+        super().__init__()
+
+        # Save the activation function
+        self.activation = activation
+
+        # Linear transformation weight matrix for edges
+        self.W = nn.Linear(in_features, out_features, bias=False)
+
+    def forward(self, X, Y, edge_index):
+        """Perform graph convolution operation by summing over the transformed
+        edge features of the given node's neighborhood.
+
+        Args:
+            X (Tensor): Input node features of shape (num_nodes, in_features).
+            Y (Tensor): Input edge features of shape (num_edges, in_features).
+            edge_index (Tensor): Edge index of shape (num_edges, 2).
+        Returns:
+            X_prime (Tensor): Output node features after graph convolution of shape (num_nodes, num_node_out_features).
+            Y_prime (Tensor): Output edge features after graph convolution of shape (num_edges, num_edge_out_features).
+        """
+
+        # Transform the edge features
+        Y_prime = self.W(Y)
+
+        # Apply activation if necessary
+        # TODO: figure if this neccessary
+        # if self.activation is not None:
+            # Y_prime = self.activation(Y_prime)
+ 
+        # Sum the transformed edge features of the neighborhood
+        n, m = X.shape
+        node_edge_agg = torch.zeros(n, m, dtype=torch.double)
+        src_nodes = edge_index[:, 0].to(int)
+        node_edge_agg.index_add_(0, src_nodes, Y_prime)
+
+        # Add the edge convolution to the node convolution
+        X_prime = X + node_edge_agg
+
+        # Apply activation if necessary
+        if self.activation is not None:
+            X_prime = self.activation(X_prime)
+        
+        return X_prime, Y_prime
+
+    def __str__(self):
+        """Return the name of the layer."""
+        act_name = str(self.activation) if self.activation is not None else "None"
+        return f"GraphSumEdgeConv (act: {act_name})"

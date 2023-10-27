@@ -11,13 +11,14 @@ import torch
 class GNN(nn.Module):
     """A full Graph Neural Network for mutagenicity prediction."""
 
-    def __init__(self, architecture, pooling, dropout=0.1):
+    def __init__(self, node_architecture, pooling, dropout=0.1, edge_architecture=None):
         """
         Initialize the network.
         Args:
-            architecture (list of lists): 
-                List of layers, each layer is a list of the given layer type and arguments for the layer
-                passed as a dictionary.
+            node_architecture (list):
+                Type of the layer, dimensions, hyperparameters for the layer.
+            edge_architecture (list):
+                Type of the layer, dimensions, hyperparameters for the layer.
             pooling (nn.Module or callable):
                 Pooling function to apply, as x_pooled = pooling(x).
             dropout (float):
@@ -28,20 +29,40 @@ class GNN(nn.Module):
 
         # Save the dropout probability
         self.dropout = dropout
+        self.use_edges = edge_architecture is not None
+
+        # Parse node architecture info
+        node_conv, node_dims, node_conv_kwargs = node_architecture
+
+        # Parse edge integration info
+        if self.use_edges:
+            edge_conv, edge_dims, edge_conv_kwargs = edge_architecture
         
         # Deep Graph Convolutional Architecture
         self.convs = nn.ModuleList()
-        self.conv_dims = []
-        for layer in architecture:
-            # Add the layer
-            self.convs.append(layer[0](**layer[1]))
-            # Add the dimension of the layer
-            self.conv_dims.append(layer[1]['out_features'])
+        for out_dim_index in range(1, len(node_dims)):
+            # Get the in/out dimension
+            in_dim = node_dims[out_dim_index - 1]
+            out_dim = node_dims[out_dim_index]
+
+            # Add the node convolutional layer
+            l = node_conv(in_dim, out_dim, **node_conv_kwargs)
+            self.convs.append(l)
+
+            # Add the edge convolutional layer (optional)
+            if self.use_edges:
+                # Get the in/out dimension
+                in_dim = edge_dims[out_dim_index - 1]
+                out_dim = edge_dims[out_dim_index]
+
+                # Add the edge convolutional layer
+                l = edge_conv(in_dim, out_dim, **edge_conv_kwargs)
+                self.convs.append(l)
 
         # Setup the prediction head
         self.head = nn.Sequential(
             pooling,
-            nn.Linear(self.conv_dims[-1], 1),
+            nn.Linear(node_dims[-1], 1),
         )
 
     def forward(self, graphs):
@@ -60,16 +81,33 @@ class GNN(nn.Module):
         # Save the results
         yhats = []
         for graph in graphs:
-            # Get the graph attributes
-            x, adj = graph['node_features'], graph['adj']
+            # Get the node attributes
+            X, adj = graph['node_features'], graph['adj']
+            # get the edge attributes
+            Y, edge_index = graph['edge_features'], graph['edge_index']
             # Run through the conv. layers to obtain embeddings of nodes
-            for conv_layer in self.convs:
-                x = conv_layer(x, adj)
+            i = 0
+            while i < len(self.convs):
+                # Define convolutional layer
+                conv_layer = self.convs[i]
+
+                # Pass through the node layer
+                X = conv_layer(X, adj)
+
+                # Pass through the edge layer (optional)
+                if self.use_edges:
+                    i += 1
+                    conv_layer = self.convs[i]
+                    X, Y = conv_layer(X, Y, edge_index)
+                
+                # Apply dropout (optional)
                 if self.dropout > 0:
-                    x = F.dropout(x, p=self.dropout, training=self.training)
-            
+                    X = F.dropout(X, p=self.dropout, training=self.training)
+
+                i += 1
+
             # Get the prediction
-            yhat = self.head(x)
+            yhat = self.head(X)
 
             # Save the result
             yhats.append(yhat)

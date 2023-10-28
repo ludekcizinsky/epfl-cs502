@@ -47,6 +47,8 @@ def train_and_evaluate(model, train_loader, val_loader, criterion, optimizer, nu
         import wandb
         wandb.init(project="cs502-hw2-gnns", config=config)
         wandb.watch(model)
+    else:
+        wandb = None
 
     # Store the train and val performance over epochs
     train_losses, train_f1s = [], []
@@ -109,8 +111,9 @@ def train_and_evaluate(model, train_loader, val_loader, criterion, optimizer, nu
             print(f'Epoch [{epoch + 1}/{num_epochs}]({end_time} s)\n'
             f'\tTrain Loss: [bold]{total_loss:.4f}[/bold] Train F1(macro): [bold]{train_f1:.2f}[/bold]\n'
             f'\tValidation Loss: [bold]{total_loss_val:.4f}[/bold] Validation F1(macro): [bold]{val_f1:.2f}[/bold]')
-         
-    return train_losses, train_f1s, val_losses, val_f1s
+
+ 
+    return train_losses, train_f1s, val_losses, val_f1s, wandb
 
 # ---------------- Evaluation Utilities
 def evaluate(model, test_loader, criterion):
@@ -193,7 +196,8 @@ def plot_losses_and_f1s(losses, f1s, axs, label):
     sns.lineplot(x=range(len(losses)), y=losses, ax=axs[0], label=f"{label} Loss")
     sns.lineplot(x=range(len(f1s)), y=f1s, ax=axs[1], label=f"{label} F1 (macro)")
 
-def plot_graph(edge_index, ax, node_labels, node_colors, edge_labels=None, edge_colors=None):
+
+def plot_graph(edge_index, ax, node_labels, node_colors=None, edge_labels=None, edge_colors=None):
     """Plots the given graph.
 
     Args:
@@ -385,6 +389,6 @@ def plot_predictions(model, cmap_nodes, cmap_edges, indices, dataset, n_plot):
         # Add colorbar
         sm = plt.cm.ScalarMappable(cmap=cmap_nodes)
         sm.set_array([])
-        fig.colorbar(sm, ax=axs[i], orientation='horizontal')
+        fig.colorbar(sm, ax=axs[i], orientation='horizontal', label='Attribution')
 
     return fig, axs

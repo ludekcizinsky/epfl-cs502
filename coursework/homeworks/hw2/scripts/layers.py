@@ -1,10 +1,13 @@
 """Module implementing the various graph convolutional layers. Namely:
     - (1) Normal graph convolution
-    - (2) GraphSAGE convolution (with Mean aggregation)
+    - (2) GraphSAGE convolution (with several aggregation functions)
     - (3) Attention-based graph convolution
-Finally, the following pooling layers are implemented:
+The following pooling layers are implemented:
     - (4) Mean pooling
     - (5) Max pooling
+Finally, the following edge convolution layers are implemented:
+    - (6) GraphSumEdgeConv
+    - (7) GraphAttentionEdgeConv
 """
 
 # ---------------- Import libraries and/or modules

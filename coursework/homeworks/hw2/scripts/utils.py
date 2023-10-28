@@ -325,7 +325,7 @@ def attr2color(attr, cmap):
 
     return colors
 
-def plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, ax):
+def plot_graph_with_attributions(Gd, model, cmap_nodes, ax):
     """Plots the given graph with attributions.
 
     Args:
@@ -333,7 +333,6 @@ def plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, ax):
             to torch tensors.
         model (torch.nn.Module): model to be evaluated.
         cmap_nodes (matplotlib.colors.ListedColormap): colormap for the nodes.
-        cmap_edges (matplotlib.colors.ListedColormap): colormap for the edges.
         ax (matplotlib.axes.Axes): Axis object where the graph should be plotted.
     """
 
@@ -372,13 +371,12 @@ def plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, ax):
     plot_graph(Gd['edge_index'], ax, node_labels, node_colors, edge_labels, edge_colors)
 
 
-def plot_predictions(model, cmap_nodes, cmap_edges, indices, dataset, n_plot):
+def plot_predictions(model, cmap_nodes, indices, dataset, n_plot):
     """Plot the predictions of the given model on the given dataset.
 
     Args:
         model (torch.nn.Module): model to be evaluated.
         cmap_nodes (matplotlib.colors.ListedColormap): colormap for the nodes.
-        cmap_edges (matplotlib.colors.ListedColormap): colormap for the edges.
         indices (list): indices of the graphs to be plotted.
         dataset (torch.utils.data.Dataset): dataset containing the graphs.
         n_plot (int): number of graphs to be plotted.
@@ -395,7 +393,7 @@ def plot_predictions(model, cmap_nodes, cmap_edges, indices, dataset, n_plot):
     for i in range(n_plot):
         j = indices[i]
         Gd = dataset[j][0]
-        plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, axs[i])
+        plot_graph_with_attributions(Gd, model, cmap_nodes, axs[i])
 
         # Add colorbar
         sm = plt.cm.ScalarMappable(cmap=cmap_nodes)

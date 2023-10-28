@@ -117,42 +117,101 @@ class GNN(nn.Module):
         yhats = torch.stack(yhats).squeeze()
 
         return yhats
-    
-    def predict(self, X, adj, Y=None, eindx=None):
-        """Get the prediction for the given graph.
 
+    def _predict_nd(self, Xb, adjb):
+        """Get the prediction for the given batch of graphs which
+        are of the same type! Uses edges only.
+        
+        This function is used to determine the attribution scores of the input using the Captum library.
+        
+        NB: I am aware that ideally i should have a single function for both cases, but given the Captum library
+        API, this is the easiest way to do it.
+    
         Args:
-            X (torch.Tensor): node features.
-            adj (torch.Tensor): adjacency matrix.
-            Y (torch.Tensor): edge features. (optional)
-            eindx (torch.Tensor): edge index. (optional)
+            Xb (torch.Tensor): node features.
+            adjb (torch.Tensor): adjacency matrix.
         Returns:
             yhat (torch.Tensor): prediction. 
         """
-        i = 0
-        while i < len(self.convs):
-            # Define convolutional layer
-            conv_layer = self.convs[i]
+        N = Xb.shape[0]
+        yhats = []
+        for gi in range(N):
 
-            # Pass through the node layer
-            X = conv_layer(X, adj)
+            # Get the ith input from the batch
+            X, adj = Xb[gi], adjb[gi]
+            i = 0
+            while i < len(self.convs):
+                # Define convolutional layer
+                conv_layer = self.convs[i]
 
-            # Pass through the edge layer (optional)
-            if self.use_edges:
+                # Pass through the node layer
+                X = conv_layer(X, adj)
+
+                # Apply dropout (optional)
+                if self.dropout > 0:
+                    X = F.dropout(X, p=self.dropout, training=self.training)
+
+                i += 1
+
+            # Get the prediction
+            yhat = self.head(X)
+            yhats.append(yhat)
+        
+        # Convert the result into tensor (required for loss computation)
+        #  and squeeze for the correct shape (n_samples, 1) -> (n_samples, )
+        result = torch.stack(yhats).squeeze()
+
+        return result
+ 
+    def _predict_nded(self, Xb, Yb, adjb, eindxb):
+        """Get the prediction for the given batch of graphs which
+        are of the same type! Uses both nodes and edges as features.
+        
+        This function is used to determine the attribution scores of the input using the Captum library.
+ 
+        Args:
+            Xb (torch.Tensor): node features.
+            Yb (torch.Tensor): edge features.
+            adjb (torch.Tensor): adjacency matrix.
+            eindxb (torch.Tensor): edge index.
+        Returns:
+            yhat (torch.Tensor): prediction. 
+        """
+        N = Xb.shape[0]
+        yhats = []
+        for gi in range(N):
+
+            # Get the ith input from the batch
+            X, adj, Y, eindx = Xb[gi], adjb[gi], Yb[gi], eindxb[gi]
+
+            i = 0
+            while i < len(self.convs):
+                # Define convolutional layer
+                conv_layer = self.convs[i]
+
+                # Pass through the node layer
+                X = conv_layer(X, adj)
+
+                # Pass through the edge layer
                 i += 1
                 conv_layer = self.convs[i]
                 X, Y = conv_layer(X, Y, eindx)
 
-            # Apply dropout (optional)
-            if self.dropout > 0:
-                X = F.dropout(X, p=self.dropout, training=self.training)
+                # Apply dropout (optional)
+                if self.dropout > 0:
+                    X = F.dropout(X, p=self.dropout, training=self.training)
 
-            i += 1
+                i += 1
 
-        # Get the prediction
-        yhat = self.head(X)
+            # Get the prediction
+            yhat = self.head(X)
+            yhats.append(yhat)
+        
+        # Convert the result into tensor (required for loss computation)
+        #  and squeeze for the correct shape (n_samples, 1) -> (n_samples, )
+        result = torch.stack(yhats).squeeze()
 
-        return yhat
+        return result
 
     def __str__(self):
         """String representation of the model."""

@@ -164,24 +164,30 @@ def evaluate(model, test_loader, criterion):
 
 # ---------------- Attribution Utilities
 def get_ig_attributions(model, graph, use_edges=False):
+    """Get the attributions of the given graph using Integrated Gradients.
 
-    # Define the input
+    Args:
+        model (torch.nn.Module): model to be evaluated.
+        graph (list): list containing the graph's attributes converted
+            to torch tensors.
+        use_edges (bool): whether to use the edge features. (optional)
+    Returns:
+        attributions (list): attributions of the given graph.
+    """
+
+    # Compute the attributions
     if use_edges:
         X, adj, Y, eindx = graph
         X, adj, Y, eindx = X.unsqueeze(0), adj.unsqueeze(0), Y.unsqueeze(0), eindx.unsqueeze(0)
+ 
+        ig = IntegratedGradients(model._predict_nded)
+        attributions = ig.attribute((X, Y), additional_forward_args=(adj, eindx), n_steps=100)
     else:
         X, adj = graph
         X, adj = X.unsqueeze(0), adj.unsqueeze(0)
 
-    
-    # Initialize the Integrated Gradients algorithm
-    ig = IntegratedGradients(model.predict)
-
-    # Compute the attributions
-    if use_edges:
-        attributions = ig.attribute((X, adj, Y, eindx), n_steps=1000)
-    else:
-        attributions = ig.attribute((X, adj), n_steps=1000)
+        ig = IntegratedGradients(model._predict_nd)
+        attributions = ig.attribute(X, additioanl_forward_args=adj, n_steps=100)
 
     return attributions
 
@@ -236,17 +242,22 @@ def plot_graph(edge_index, ax, node_labels, node_colors=None, edge_labels=None, 
 
     # Plot the graph on the specified axis
     pos = nx.kamada_kawai_layout(G)  # Define the layout algorithm
-    nx.draw(G, pos, with_labels=False, node_size=500, node_color=node_colors, font_weight='bold', font_color='white', font_size=10, ax=ax)
+    nx.draw(G, pos, with_labels=False, node_size=500, node_color=node_colors, font_weight='bold', font_color='white', font_size=10, ax=ax, width=2.0)
     nx.draw_networkx_labels(G, pos, labels=node_labels, font_color='white', font_weight='bold', font_size=10, ax=ax)
 
-    # Add edge labels (optional)
-    if edge_labels is not None:
-        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_weight='bold', font_size=10, ax=ax)
-
     # Manually draw the edges with custom colors
-    if edge_colors is not None:
-        for edge, color in zip(G.edges, edge_colors):
+    if edge_colors is not None and edge_labels is not None:
+        for edge, color in zip(edges, edge_colors):
             nx.draw_networkx_edges(G, pos, edgelist=[edge], edge_color=color, width=2.0, ax=ax)
+            nx.draw_networkx_edge_labels(G, pos, edge_labels={edge: edge_labels[edge]}, font_color=color, font_weight='bold', font_size=10, ax=ax)
+
+    elif edge_colors is not None:
+        for edge, color in zip(edges, edge_colors):
+            nx.draw_networkx_edges(G, pos, edgelist=[edge], edge_color=color, width=2.0, ax=ax)
+
+    # Add edge labels (optional)
+    elif edge_labels is not None:
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_weight='bold', font_size=10, ax=ax)
 
 def get_feat_colors(feat, cmap):
     """Get colors for the nodes/edges of a graph based on their features.
@@ -345,11 +356,11 @@ def plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, ax):
 
     # Map the attributions to colors
     if model.use_edges:
-        node_attr, _, edge_attr, _ = attr
+        node_attr, edge_attr = attr
         node_colors = attr2color(node_attr.squeeze(0), cmap_nodes)
-        edge_colors = attr2color(edge_attr.squeeze(0), cmap_edges)
+        edge_colors = attr2color(edge_attr.squeeze(0), cmap_nodes)
     else:
-        node_attr, _ = attr
+        node_attr = attr
         node_colors = attr2color(node_attr.squeeze(0), cmap_nodes)
         edge_colors = None
 

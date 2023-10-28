@@ -380,7 +380,7 @@ class GraphSumEdgeConv(nn.Module):
         # Initialize the parent class
         super().__init__()
 
-        # Save the activation function
+        # Save the activation function and local flag
         self.activation = activation
 
         # Linear transformation weight matrix for edges
@@ -401,11 +401,6 @@ class GraphSumEdgeConv(nn.Module):
 
         # Transform the edge features
         Y_prime = self.W(Y)
-
-        # Apply activation if necessary
-        # TODO: figure if this neccessary
-        # if self.activation is not None:
-            # Y_prime = self.activation(Y_prime)
  
         # Sum the transformed edge features of the neighborhood
         n, m = X.shape
@@ -426,3 +421,93 @@ class GraphSumEdgeConv(nn.Module):
         """Return the name of the layer."""
         act_name = str(self.activation) if self.activation is not None else "None"
         return f"GraphSumEdgeConv (act: {act_name})"
+
+class GraphAttentionEdgeConv(nn.Module):
+    """Enhances node embeddings with edge features using simple attention mechanism.
+
+    Attention mechanism:
+        - Compute attention score as a dot product between given node's features and given edge features
+        - Apply softmax to get the attention coefficients (weights)
+        - To each node, add the weighted sum of the edge features
+
+    """
+
+    def __init__(self, in_features, out_features, activation=None, local=False):
+        # Initialize the parent class
+        super().__init__()
+
+        # Save the activation function and local flag
+        self.activation = activation
+        self.local = local
+
+        # Linear transformation weight matrices for node and edge features
+        self.W = nn.Linear(in_features, out_features, bias=False)
+
+    def _create_binary_edge_association_mask(self, edge_index, num_nodes):
+        """
+        Create a binary mask indicating whether each node is associated with each edge.
+
+        Args:
+            edge_index (Tensor): Edge index array of shape (num_edges, 2).
+            num_nodes (int): Total number of nodes.
+
+        Returns:
+            mask (Tensor): Binary mask of shape (num_nodes, num_edges).
+        """
+
+        # Get the number of edges
+        num_edges = edge_index.shape[0]
+
+        # Create an empty binary mask
+        mask = torch.zeros((num_nodes, num_edges), dtype=torch.double)
+
+        # Fill in the binary mask based on edge_index
+        for edge_idx, (src_node, target_node) in enumerate(edge_index):
+            mask[src_node, edge_idx] = 1.0
+            mask[target_node, edge_idx] = 1.0
+
+        return mask
+
+    def forward(self, X, Y, edge_index):
+        """Perform graph convolution operation with attention mechanism.
+
+        Args:
+            X (Tensor): Input node features of shape (num_nodes, in_node_features).
+            Y (Tensor): Input edge features of shape (num_edges, in_edge_features).
+            edge_index (Tensor): Edge index of shape (2, num_edges).
+
+        Returns:
+            X_prime (Tensor): Output node features after graph convolution of shape (num_nodes, out_node_features).
+        """
+
+        # Transform edge features
+        Y_prime = self.W(Y)
+
+        # Calculate attention scores using a shared weight matrix
+        attention_scores = X @ Y_prime.T # Shape (num_nodes, num_edges)
+
+        # Apply softmax to obtain attention coefficients
+        attention_weights = F.softmax(attention_scores, dim=1)
+
+        if self.local:
+            # Create a binary mask indicating whether each node is associated with each edge
+            mask = self._create_binary_edge_association_mask(edge_index, X.shape[0])
+            # Apply the mask to the attention weights
+            attention_weights = attention_weights * mask
+
+        # Apply attention to edge features
+        attentive_edge_features = attention_weights @ Y_prime # Shape (num_nodes, out_features) 
+
+        # Add the attentive edge features to the node features
+        X_prime = X + attentive_edge_features
+
+        # Apply activation if necessary
+        if self.activation is not None:
+            X_prime = self.activation(X_prime)
+
+        return X_prime, Y_prime
+
+    def __str__(self):
+        """Return the name of the layer."""
+        act_name = str(self.activation) if self.activation is not None else "None"
+        return f"GraphAttentionEdgeConv (act: {act_name}, local: {self.local})"

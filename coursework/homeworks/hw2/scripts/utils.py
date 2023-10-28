@@ -13,9 +13,11 @@ from sklearn.metrics import f1_score, accuracy_score
 import time
 
 # Plotting/Pretty Printing
+import matplotlib.pyplot as plt
 import seaborn as sns
 import networkx as nx
 from rich import print
+from captum.attr import IntegratedGradients
 
 # Built in
 from IPython.display import clear_output
@@ -157,6 +159,29 @@ def evaluate(model, test_loader, criterion):
 
     return total_loss, eval_f1, eval_acc, (y_true, y_pred)
 
+# ---------------- Attribution Utilities
+def get_ig_attributions(model, graph, use_edges=False):
+
+    # Define the input
+    if use_edges:
+        X, adj, Y, eindx = graph
+        X, adj, Y, eindx = X.unsqueeze(0), adj.unsqueeze(0), Y.unsqueeze(0), eindx.unsqueeze(0)
+    else:
+        X, adj = graph
+        X, adj = X.unsqueeze(0), adj.unsqueeze(0)
+
+    
+    # Initialize the Integrated Gradients algorithm
+    ig = IntegratedGradients(model.predict)
+
+    # Compute the attributions
+    if use_edges:
+        attributions = ig.attribute((X, adj, Y, eindx), n_steps=1000)
+    else:
+        attributions = ig.attribute((X, adj), n_steps=1000)
+
+    return attributions
+
 # ---------------- Plotting Utilities
 def plot_losses_and_f1s(losses, f1s, axs, label):
     """Plot the losses and F1 scores over epochs.
@@ -168,14 +193,16 @@ def plot_losses_and_f1s(losses, f1s, axs, label):
     sns.lineplot(x=range(len(losses)), y=losses, ax=axs[0], label=f"{label} Loss")
     sns.lineplot(x=range(len(f1s)), y=f1s, ax=axs[1], label=f"{label} F1 (macro)")
 
-def plot_graph(edge_index, ax, node_colors, edge_colors):
+def plot_graph(edge_index, ax, node_labels, node_colors, edge_labels=None, edge_colors=None):
     """Plots the given graph.
 
     Args:
         edge_index (torch.Tensor): edge index of a graph.
         ax (matplotlib.axes.Axes): Axis object where the graph should be plotted.
-    Returns:
-        G (networkx.Graph): NetworkX graph.
+        node_labels (dict): dictionary mapping the index of a node to its label.
+        node_colors (list): list of colors for the nodes of a graph.
+        edge_labels (dict): dictionary mapping the index of an edge to its label. (optional)
+        edge_colors (list): list of colors for the edges of a graph. (optional)
     """
 
     # Create an empty NetworkX graph
@@ -197,16 +224,25 @@ def plot_graph(edge_index, ax, node_colors, edge_colors):
     # Add edges to the graph
     i = 0
     for s, t in edges:
-        G.add_edge(s, t, color=edge_colors[i])
+        if edge_colors is not None:
+            G.add_edge(s, t, color=edge_colors[i])
+        else:
+            G.add_edge(s, t)
         i += 1
 
     # Plot the graph on the specified axis
     pos = nx.kamada_kawai_layout(G)  # Define the layout algorithm
-    nx.draw(G, pos, with_labels=True, node_size=500, node_color=node_colors, font_weight='bold', font_color='white', font_size=10, ax=ax)
+    nx.draw(G, pos, with_labels=False, node_size=500, node_color=node_colors, font_weight='bold', font_color='white', font_size=10, ax=ax)
+    nx.draw_networkx_labels(G, pos, labels=node_labels, font_color='white', font_weight='bold', font_size=10, ax=ax)
+
+    # Add edge labels (optional)
+    if edge_labels is not None:
+        nx.draw_networkx_edge_labels(G, pos, edge_labels=edge_labels, font_color='black', font_weight='bold', font_size=10, ax=ax)
 
     # Manually draw the edges with custom colors
-    for edge, color in zip(G.edges, edge_colors):
-        nx.draw_networkx_edges(G, pos, edgelist=[edge], edge_color=color, width=2.0, ax=ax)
+    if edge_colors is not None:
+        for edge, color in zip(G.edges, edge_colors):
+            nx.draw_networkx_edges(G, pos, edgelist=[edge], edge_color=color, width=2.0, ax=ax)
 
 def get_feat_colors(feat, cmap):
     """Get colors for the nodes/edges of a graph based on their features.
@@ -214,7 +250,6 @@ def get_feat_colors(feat, cmap):
     Args:
         feat (torch.Tensor): features of the nodes/edges of a graph.
         cmap (matplotlib.colors.ListedColormap): colormap.
-
     Returns:
         colors (list): list of colors for the nodes/edges of a graph. 
     """
@@ -223,3 +258,133 @@ def get_feat_colors(feat, cmap):
     colors = [cmap(i / m) for i in range(n)]
 
     return colors
+
+def get_feat_labels(feat, edge_index=None):
+    """Get labels for the nodes/edges of a graph based on their features.
+
+    Args:
+        feat (torch.Tensor): features of the nodes/edges of a graph.
+        edge_index (torch.Tensor): edge index of a graph. (optional)
+    Returns:
+        feat_to_category (dict): dictionary mapping the index of a node/edge to its feature.
+    """
+    
+    if edge_index is None:
+        feat_to_category = {}
+        for index, one_hot_category in enumerate(feat):
+            category_number = torch.argmax(one_hot_category).item()
+            feat_to_category[index] = category_number
+    else:
+        feat_to_category = {}
+        for index, one_hot_category in enumerate(feat):
+            category_number = torch.argmax(one_hot_category).item()
+            feat_to_category[(edge_index[index][0].item(), edge_index[index][1].item())] = category_number 
+
+    return feat_to_category
+
+def attr2color(attr, cmap):
+    """Converts an attribution value to a color.
+
+    Args:
+        attr (torch.Tensor): attribution values of shape (# of nodes/edges, feature dimension)
+        cmap (matplotlib.colors.ListedColormap): colormap.
+    Returns:
+        colors (list of tuples): color corresponding to the attribution value of the given node.
+    """
+
+    # Aggregate the attributions accross the feature dimension
+    # NB: Use log to increase the contrast between the attributions
+    attr = torch.log(attr + 1).mean(dim=1)
+
+    # Standard normalise
+    m = attr.mean(0, keepdim=True)
+    s = attr.std(0, unbiased=False, keepdim=True)
+    attr -= m
+    attr /= s
+
+    # Convert to numpy
+    attr = attr.detach().numpy()
+
+    # Convert to colors
+    colors = [cmap(attr[i]) for i in range(len(attr))]
+
+    return colors
+
+def plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, ax):
+    """Plots the given graph with attributions.
+
+    Args:
+        Gd (dict): dictionary containing the graph's attributes converted
+            to torch tensors.
+        model (torch.nn.Module): model to be evaluated.
+        cmap_nodes (matplotlib.colors.ListedColormap): colormap for the nodes.
+        cmap_edges (matplotlib.colors.ListedColormap): colormap for the edges.
+        ax (matplotlib.axes.Axes): Axis object where the graph should be plotted.
+    """
+
+    # Prepare the graph
+    if model.use_edges:
+        graph = [
+            Gd['node_features'],
+            Gd['adj'],
+            Gd['edge_features'],
+            Gd['edge_index'],
+        ]
+    else:
+        graph = [
+            Gd['node_features'],
+            Gd['adj'],
+        ]
+
+    # Get the attributions
+    attr = get_ig_attributions(model, graph, use_edges=model.use_edges)
+
+    # Map the attributions to colors
+    if model.use_edges:
+        node_attr, _, edge_attr, _ = attr
+        node_colors = attr2color(node_attr.squeeze(0), cmap_nodes)
+        edge_colors = attr2color(edge_attr.squeeze(0), cmap_edges)
+    else:
+        node_attr, _ = attr
+        node_colors = attr2color(node_attr.squeeze(0), cmap_nodes)
+        edge_colors = None
+
+    # Get labels
+    node_labels = get_feat_labels(Gd['node_features'])
+    edge_labels = get_feat_labels(Gd['edge_features'], Gd["edge_index"])
+
+    # Plot the graph
+    plot_graph(Gd['edge_index'], ax, node_labels, node_colors, edge_labels, edge_colors)
+
+
+def plot_predictions(model, cmap_nodes, cmap_edges, indices, dataset, n_plot):
+    """Plot the predictions of the given model on the given dataset.
+
+    Args:
+        model (torch.nn.Module): model to be evaluated.
+        cmap_nodes (matplotlib.colors.ListedColormap): colormap for the nodes.
+        cmap_edges (matplotlib.colors.ListedColormap): colormap for the edges.
+        indices (list): indices of the graphs to be plotted.
+        dataset (torch.utils.data.Dataset): dataset containing the graphs.
+        n_plot (int): number of graphs to be plotted.
+    
+    Returns:
+        fig (matplotlib.figure.Figure): figure containing the plots.
+        axs (list of matplotlib.axes.Axes): axes containing the plots.
+    """
+
+    # Set the plot
+    fig, axs = plt.subplots(figsize=(15, 8), nrows=1, ncols=n_plot)
+
+    # For simplicity, plot only the first 2 graphs
+    for i in range(n_plot):
+        j = indices[i]
+        Gd = dataset[j][0]
+        plot_graph_with_attributions(Gd, model, cmap_nodes, cmap_edges, axs[i])
+
+        # Add colorbar
+        sm = plt.cm.ScalarMappable(cmap=cmap_nodes)
+        sm.set_array([])
+        fig.colorbar(sm, ax=axs[i], orientation='horizontal')
+
+    return fig, axs

@@ -117,6 +117,42 @@ class GNN(nn.Module):
         yhats = torch.stack(yhats).squeeze()
 
         return yhats
+    
+    def predict(self, X, adj, Y=None, eindx=None):
+        """Get the prediction for the given graph.
+
+        Args:
+            X (torch.Tensor): node features.
+            adj (torch.Tensor): adjacency matrix.
+            Y (torch.Tensor): edge features. (optional)
+            eindx (torch.Tensor): edge index. (optional)
+        Returns:
+            yhat (torch.Tensor): prediction. 
+        """
+        i = 0
+        while i < len(self.convs):
+            # Define convolutional layer
+            conv_layer = self.convs[i]
+
+            # Pass through the node layer
+            X = conv_layer(X, adj)
+
+            # Pass through the edge layer (optional)
+            if self.use_edges:
+                i += 1
+                conv_layer = self.convs[i]
+                X, Y = conv_layer(X, Y, eindx)
+
+            # Apply dropout (optional)
+            if self.dropout > 0:
+                X = F.dropout(X, p=self.dropout, training=self.training)
+
+            i += 1
+
+        # Get the prediction
+        yhat = self.head(X)
+
+        return yhat
 
     def __str__(self):
         """String representation of the model."""

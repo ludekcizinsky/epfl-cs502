@@ -81,12 +81,23 @@ Two types of edge convolutions are used: Graph Edge Sum \texttt{ESUMConv} and Gr
 
 The idea behind \texttt{ESUMConv} is that each node's representation should be updated 
 by sum of the edge features that are associated with the given node. Thus, the node's
-representation no longer depends on the type of its neighbors, but also in what way 
-is the node connected to its neighbors. The \texttt{EATTConv} extends the \texttt{ESUMConv}
-idea by using attention weights to indicate the importance of each edge feature for the
+representation no longer depends on the type of its neighbors, but also on the type of
+connections with its neighbors. The \texttt{EATTConv} extends the \texttt{ESUMConv}
+idea by using attention weights to indicate the importance of each edge feature. Importantly,
+in contrast to the \texttt{ESUMConv}, can be set to not only aggregate over the node's associated edges,
+but also over over all ages in the graph. In the remaining of the report, the \texttt{EATTConvL} will refer
+to the local version while \texttt{EATTConvG} will refer to the global version.
 
-\section{Experiments}\label{sec:experiments}
+Finally, after the pass through the given number of convolutional layers, the transformed
+node features are reduced via one of the two pooling layers, \texttt{MaxPool} or \texttt{MeanPool}, 
+into a one dimensional embedding representing the whole graph. This is then fed through
+a linear layer to obtain the final prediction. Given the model's output, the binary cross entropy
+loss is used to compute the loss, which is then used to update the model's parameters.
 
+Last but not the least, macro averaged F1 score is used as the metric to evaluate the performance
+of all models. This means that we take into account model's ability to correctly classify both
+mutagenic and non-mutagenic compounds. Importantly, the F1 score takes into account both precision and 
+recall and as such can be relied on even in the case of unbalanced labels.
 
 \section{Results}
 

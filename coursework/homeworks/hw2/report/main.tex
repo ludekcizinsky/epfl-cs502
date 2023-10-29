@@ -2,14 +2,20 @@
 
 \usepackage{titlesec}
 
-\titleformat{\section}{\normalfont\Large\bfseries}{\thesection}{2em}{}
-\titlespacing*{\section}{1pt}{*1}{*1}
+% Section titles and subsection titles settings
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{2em}{}
+\titlespacing*{\section}{2pt}{*1}{*1}
+\titleformat{\subsection}{\normalfont\small\bfseries}{\thesubsection}{1em}{}[]
+\titlespacing{\subsection}{0pt}{0.6\baselineskip}{0.6\baselineskip}
+
 
 % Page layout
 \usepackage[a4paper,margin=1in]{geometry}
 
-% Font settings (choose any font package you prefer)
-\usepackage{mathptmx}  % Times New Roman font
+% Math
+\usepackage{mathptmx}  
+
+% Fonts
 \usepackage{fontspec}
 
 % Hyperlinks
@@ -23,7 +29,9 @@
 
 % Figures
 \usepackage{graphicx}
-\usepackage{afterpage}
+\usepackage{caption}
+\captionsetup[figure]{skip=2pt} 
+
 
 
 % Title and Author information
@@ -35,77 +43,64 @@
 \maketitle
 
 \section{Introduction}
-This report investigates the use of Graph Neural Networks
+This report investigates the use of Graph Neural Networks (GNNs) 
 for mutagenicity prediction of chemical compounds. 
-The mutagenicity of a chemical compound is a binary property
-indicating whether the compound is likely to cause mutations
-in living organisms. The prediction of mutagenicity is an
-important task in drug discovery, as mutagenic compounds
-are likely to be carcinogenic. The dataset used for this task is the 
-\textit{MUTAG} dataset \cite{mutag}, which contains 188 chemical compounds.
-The report first focuses on building optimal Graph Neural Network using
-only node features. Then, the report investigates the use of edge features
-as a way to improve the performance of the model. All experiments are
-with associated code are available at \href{https://github.com/ludekcizinsky/epfl-cs502/tree/main/coursework/homeworks/hw2}{\textcolor{blue}{Github}}. 
+The mutagenicity of a chemical compound is a binary attribute indicating whether 
+the compound is likely to cause mutations in living organisms. In the context of drug discovery,
+this is an important task that ensures the safety of newly developed drugs.
+All experiments, along with associated code, are available on \href{https://github.com/ludekcizinsky/epfl-cs502/tree/main/coursework/homeworks/hw2}{\textcolor{blue}{Github}}.
 
 \section{Dataset}\label{sec:dataset}
-The \textit{MUTAG} dataset \cite{mutag} contains 188 chemical compounds with
-binary labels indicating whether the compound is mutagenic or not. In total,
-there is 63 mutagenic and 125 non-mutagenic compounds. Each compound is represented
-as a graph. Each node and edge has is associated with one hot encoded feature vector
-indicating type of the node (atom) and type of the edge (bond). It is important to note
-that the labels are unvevenly distributed, with two thirds of the compounds being mutagenic.
-The skew in the labels is favorable for the downstream task, however, the trained
-models might be as a result more biased towards predicting mutagenic compounds.
+The \textit{MUTAG} dataset \cite{mutag} consists of 188 chemical compounds, each labeled as mutagenic ($63$) or non-mutagenic ($125$). 
+Each compound is represented as a graph, with nodes and edges associated with one-hot encoded feature vectors, denoting atom and bond types. 
+Notably, the labels are unevenly distributed, with a two-thirds majority being mutagenic compounds. Consequently, the trained models might be biased towards 
+predicting mutagenic compounds.
 
-
-The feature vectors were mapped to double precision floating point numbers to
-increase the numerical stability of the model. In addition, based on the provided
-edges indices, the adjacency matrix was constructed.
-
-
-% TODO: maybe define what is overall the goal --> build nice features
-% TODO: add figure showing the whole pipeline
-% TODO: add the explanation of global softmaxing
 \section{Methodology}\label{sec:methodology}
-On a high level, GNN's goal is to transform the given
-graph into a vector representation, which can then be used
-for the downstream task, in this case binary classification.
 
-The first part of the experiment focuses on building a GNN purely
-based on transformation of the initial node features. The experiment compares the performance of the
-three types of convolutional layers: Normal Graph Convolution (\texttt{NormConv}), 
-GraphSAGE (\texttt{SAGEConv}) and Graph Attention (\texttt{GATConv}).
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width=0.45\textwidth]{figures/pipeline.png}
+    \caption{High level overview of the model architecture.}
+    \label{fig:model}
+\end{figure}
 
-\texttt{GCNConv} first computes representation of each node by aggregating
-over the features of its neighbors. Then, the representation is transformed
-using a linear layer, and linearly transformed representation of the node is added.
-The \texttt{SAGEConv} extends the \texttt{GCNConv} by allowing the user to 
-choose the aggregation function, i.e., one can for instance use \texttt{max pooling}
-strategy to obtain the aggregate instead of mean. Finally, the \texttt{GATConv} aggregates
-the neighbors using attention weights, which indicate the importance of each neighbor 
-for the representation of the node. The attention weights are learned during training.
+At its core, GNN converts a graph into a vector representation for binary classification. 
+This work explores two approaches: one using node features and the other incorporating both node and edge features. 
+Figure \ref{fig:model} depicts the model architecture. After convolutional layers, node features are reduced using \texttt{MaxPool} or \texttt{MeanPool} into a one-dimensional graph representation. 
+A linear layer then produces the final prediction.
 
-In the second part of the experiment, the edge features are used to improve the performance
-of the model. In general, every node convolution layer is now followed by en edge convolution.
-This way the model can learn to incorporate the edge features into the node representation.
-Two types of edge convolutions are used: Graph Edge Sum \texttt{ESUMConv} and Graph Edge Attention
-(\texttt{EATTConv}).
+\subsection{Node features}
+Node feature aggregation employs three types of convolutional layers: 
+Normal Graph Convolution (\texttt{NORM}), GraphSAGE (\texttt{SAGE}), 
+and Graph Attention (\texttt{GATT}). In \texttt{NORM}, each node's representation 
+is computed by aggregating neighbor features, followed by linear transformation and addition.
+\texttt{SAGE} extends \texttt{NORM} by offering flexibility in the choice of aggregation function. 
+This study utilizes the \texttt{SUM} strategy for efficient and effective aggregation.
+Finally, the \texttt{GATT} aggregates the neighbors using attention weights (learnt during training), 
+which indicate the importance of each neighbor for the representation of the node. For each neighbor,
+the attention weight is computed as a dot product between the trainable vector and concatenation of
+the node and neighbor features. Importantly, the \texttt{GATTGl} normalizes the attention weights
+using the softmax function over all graph's attention weights, while \texttt{GATTLc} uses the softmax
+over the attention weights of the neighbors of the given node. Consequently, the global approach
+will only emphasize the most important interactions in the graph, while the local approach focuses
+on the most important interactions within the neighborhood.
 
-The idea behind \texttt{ESUMConv} is that each node's representation should be updated 
-by sum of the edge features that are associated with the given node. Thus, the node's
-representation no longer depends on the type of its neighbors, but also on the type of
-connections with its neighbors. The \texttt{EATTConv} extends the \texttt{ESUMConv}
-idea by using attention weights to indicate the importance of each edge feature. Importantly,
-in contrast to the \texttt{ESUMConv}, can be set to not only aggregate over the node's associated edges,
-but also over over all ages in the graph. In the remaining of the report, the \texttt{EATTConvL} will refer
-to the local version while \texttt{EATTConvG} will refer to the global version.
+\subsection{Edge features integration}
+As shown in Figure \ref{fig:model}, each node convolution layer is followed by 
+an edge convolution, forming a single convolutional block. 
+This approach provides flexibility in selecting the edge convolutional layer 
+and determining the number of combined convolutional blocks. 
+Two types of edge convolutions, namely Edge Sum (\texttt{ESUM}) and Edge Attention (\texttt{EATT}), are compared.
 
-Finally, after the pass through the given number of convolutional layers, the transformed
-node features are reduced via one of the two pooling layers, \texttt{MaxPool} or \texttt{MeanPool}, 
-into a one dimensional embedding representing the whole graph. This is then fed through
-a linear layer to obtain the final prediction. Given the model's output, the binary cross entropy
-loss is used to compute the loss, which is then used to update the model's parameters.
+The concept behind \texttt{ESUM} is to update each node's representation by summing the edge features 
+associated with the node. Consequently, the node's representation depends not only on its neighbors' types but also on the 
+type of connections with its neighbors. The \texttt{EATT} computes the attention weights
+as a dot product between each node and edge features. These weights are normalised with respect to 
+each node, i.e., the importance of all edges globally for the given node is computed. Finally, \texttt{EATTGl} uses
+all edges in the graph, while \texttt{EATTLc} uses only the edges associated with the given node to compute 
+the final representation of the given node.
+
 
 \begin{figure*}
     \centering
@@ -114,48 +109,42 @@ loss is used to compute the loss, which is then used to update the model's param
     \label{fig:hyperparams}
 \end{figure*}
 
-Last but not the least, macro averaged F1 score is used as the metric to evaluate the performance
-of all models. This means that we take into account model's ability to correctly classify both
-mutagenic and non-mutagenic compounds. % Importantly, the F1 score takes into account both precision and 
-% recall and as such can be relied on even in the case of unbalanced labels.
-
 \section{Experiments}
 \begin{table}[!ht]
     \centering
     \begin{tabular}{llccc}
     \toprule
-    \textbf{Layer} & \textbf{Depth} & \textbf{Val Loss} & \textbf{F1-Macro} \\
+    \textbf{Layer} & \textbf{Depth} & \textbf{Loss} & \textbf{F1-Macro} \\
     \midrule
     \texttt{Norm} & M & 0.41 & 0.74 \\
-    w/\texttt{EATTG} & L & 0.32 & 0.85 \\
+    w/\texttt{EATTGl} & L & 0.32 & 0.85 \\
     \midrule
     \texttt{SAGE} & L & 0.26 & 0.88 \\
-    w/\texttt{EATTG} & L & 0.17 & 0.89 \\
+    w/\texttt{EATTGl} & L & 0.17 & 0.89 \\
     \midrule
-    \texttt{GATT} & L & 0.33 & 0.96 \\
-    \textbf{w/\texttt{EATTG}} & \textbf{L} & \textbf{0.19} & \textbf{1.00} \\
+    \texttt{GATTGl} & L & 0.33 & 0.96 \\
+    \textbf{w/\texttt{EATTGl}} & \textbf{L} & \textbf{0.19} & \textbf{1.00} \\
     \bottomrule
     \end{tabular}
-    \caption{Experiment Results. Depth of the model is indicated by Medium (M, 2 layers) and Large (L, at least 3 layers).}
+    \caption{Experiment results evaluated on validation dataset. Depth of the model is indicated by Medium (M, 2 layers) and Large (L, at least 3 layers).}
     \label{tab:results}
 \end{table}
 
-The table \ref{tab:results} summarizes the results of the experiments. Each section
-corresponds to one particular type of convolutional layer applied on nodes. The second
-row then indicates the performance of the model when the edge features are integrated using
-the better performing method. We can clearly see that as the node convolutional layers
-are getting more sophisticated, the model's performance is improving. Further, it is important to notice
-that majority of the models consisted of at least three convolutional layers (L). This indicates
-that the model needs to be sufficiently complex to be able to learn the task. 
+Table \ref{tab:results} summarizes experiment results, organized by node convolutional layer type. 
+The second row showcases model performance with the better edge feature integration method. 
+Notably, the model's performance improves with more sophisticated node convolutional layers, \texttt{GATTGl}
+outperforming the other two types. Additionally, most models contain at least three convolutional layers, 
+indicating the need for model complexity to learn the task effectively.
 
-Finally, as the title of this report suggests, enhancing the node convolutional layers with
-the aggregated edge features via \texttt{EATTG} improves the performance accross all models.
-This is especially true for the \texttt{Norm} model, where the performance
-improves by 11\%. The other two models, on the other hand, already
-performed very well without the edge features, and thus the improvement is only marginal, yet
-still significant. 
+As the report's title suggests, enhancing node convolutional layers with aggregated edge features through \texttt{EATTGl} 
+consistently boosts performance across all models. The most substantial improvement is observed in the \texttt{Norm} model, 
+with a notable 11\% enhancement. While the other two models performed well even without edge features, 
+the improvement, while marginal, remains significant.
 
-TODO: add test evaluation performance
+The top-performing model, \texttt{GATTGl} with \texttt{EATTGl} edge convolution, 
+achieved a test set F1-Macro score of 0.77, with an equal number of mispredictions for both classes. 
+The notable variation between validation and test scores can likely be attributed in part to the dataset's small 
+size and over-tuning of hyperparameters.
 
 \section{Discussion}
 
@@ -166,24 +155,23 @@ TODO: add test evaluation performance
     \label{fig:attribution}
 \end{figure}
 
-The results clearly suggest that the attention mechanism is the best method for aggregating
-both node and edge features. This is not surprising, as the attention mechanism proved to be working
-well in many other domains \cite{transfomers}. However, the most important finding is that for the specific task of
-mutagenicity prediction, consideration of all nodes / edges, i.e., the global approach is superior
-to the local approach. Figure \ref{fig:attribution} tries to explain why this is the case. It shows the
-relative importance of each node and edge for the prediction of the graph's label. The importance is
-computed using Integrated Gradients approach \cite{attribution}. It is clear that the final prediction is
-based only on a small subset of nodes and edges (orange/brown colour) which do not need to be neccessary 
-connected. Last but not the least, Figure \ref{fig:hyperparams} shows the path towards the best performing models. Despite 
-the small number of parameters, attention based model's are able to outperform other more complex models. 
-%The importance of using the global approach is further supported by the lower performance of those models' using \texttt{ESUM} for 
-% edge aggregation, which is a local approach, i.e., only the edges associated with the given node are considered.
+The results clearly indicate that the attention mechanism is the superior choice for aggregating both node and edge features. 
+This aligns with its successful application in various domains \cite{transformers}. 
+Notably, for the specific task of mutagenicity prediction, the global approach, which considers all nodes and edges, outperforms the local approach. 
+Figure \ref{fig:attribution} provides insight into this phenomenon, illustrating the relative importance of nodes and edges in graph label prediction. 
+Integrated Gradients \cite{attribution} is used to compute importance, revealing that the final prediction relies on a selected subset of nodes and edges (orange/brown) 
+that don't necessarily need to be directly connected.
+
+Finally, Figure \ref{fig:hyperparams} shows the path to achieving the best-performing models. 
+Despite their lower parameter count, attention-based models outperform more complex ones. 
+Last but not the least, the weaker performance of models using \texttt{ESUM} for edge aggregation (local approach) 
+further underscores the effectiveness of the attention mechanism.
 
 \section{Conclusion}
-To conclude, this report investigated the use of Graph Neural Networks for the task of mutagenicity prediction. 
-The results show that both node and edge features are important for the task. Further, the global attention mechanism
-proved to be the best method for aggregating both node and edge features. Future work could focus on
-testing the proposed model on other datasets and tasks.
+In conclusion, this report explored the use of Graph Neural Networks for mutagenicity prediction. 
+The findings emphasize the significance of both node and edge features in this task. 
+Notably, the global attention mechanism emerged as the most effective method for aggregating both types of features. 
+Future work may involve evaluating the proposed model on additional datasets and tasks.
 
 \newpage
 \bibliographystyle{abbrv}

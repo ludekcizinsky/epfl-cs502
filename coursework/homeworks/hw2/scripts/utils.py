@@ -112,6 +112,10 @@ def train_and_evaluate(model, train_loader, val_loader, criterion, optimizer, nu
             f'\tTrain Loss: [bold]{total_loss:.4f}[/bold] Train F1(macro): [bold]{train_f1:.2f}[/bold]\n'
             f'\tValidation Loss: [bold]{total_loss_val:.4f}[/bold] Validation F1(macro): [bold]{val_f1:.2f}[/bold]')
 
+        # Stop training if the validation F1 score is 1.0 
+        if val_f1 == 1.0:
+            break
+
  
     return train_losses, train_f1s, val_losses, val_f1s, wandb
 
@@ -187,7 +191,7 @@ def get_ig_attributions(model, graph, use_edges=False):
         X, adj = X.unsqueeze(0), adj.unsqueeze(0)
 
         ig = IntegratedGradients(model._predict_nd)
-        attributions = ig.attribute(X, additioanl_forward_args=adj, n_steps=100)
+        attributions = ig.attribute(X, additional_forward_args=adj, n_steps=100)
 
     return attributions
 
@@ -308,8 +312,7 @@ def attr2color(attr, cmap):
     """
 
     # Aggregate the attributions accross the feature dimension
-    # NB: Use log to increase the contrast between the attributions
-    attr = torch.log(attr + 1).mean(dim=1)
+    attr = attr.mean(dim=1)
 
     # Standard normalise
     m = attr.mean(0, keepdim=True)

@@ -25,6 +25,8 @@ class GraphConv(nn.Module):
     """Simple graph convolutional layer implementing the simple neighborhood aggregation. 
     """
 
+    name = "GraphConv"
+
     def __init__(self, in_features, out_features, activation=None):
         """
         Initialize the graph convolutional layer.
@@ -79,6 +81,8 @@ class GraphConv(nn.Module):
 class GraphSAGEConv(nn.Module):
     """Implementation of the GraphSAGE convolutional layer which uses a user-specified aggregation function
     to aggregate the node features of the neighborhood."""
+
+    name = "GraphSAGEConv"
     
     def __init__(self, in_features, out_features, aggregation, activation=None):
         """
@@ -137,6 +141,9 @@ class GraphSAGEConv(nn.Module):
 
 class SumAggregation(nn.Module):
     """Aggregate node features by summing over the neighborhood."""
+
+    name = "SumAggregation"
+
     def __init__(self):
         # Initialize the parent class
         super().__init__()
@@ -161,6 +168,9 @@ class SumAggregation(nn.Module):
 
 class SqrtDegAggregation(nn.Module):
     """Aggregate node features by summing over the neighborhood and normalizing by the degrees."""
+
+    name = "SqrtDegAggregation"
+
     def __init__(self):
         # Initialize the parent class
         super().__init__()
@@ -193,6 +203,9 @@ class MaxPoolAggregation(nn.Module):
     """
     Aggregate node features by taking the maximum over the transformed neighborhood.
     """
+
+    name = "MaxPoolAggregation"
+
     def __init__(self):
         # Initialize the parent class
         super().__init__()
@@ -234,6 +247,9 @@ class GraphAttentionConv(nn.Module):
         - Apply softmax to get the attention weights
         - Compute the weighted sum of the given vector's neighbors
     """
+
+    name = "GraphAttentionConv"
+
     def __init__(self, in_features, out_features, activation=None, softmax_global=False):
         # Initialize the parent class
         super().__init__()
@@ -293,7 +309,7 @@ class GraphAttentionConv(nn.Module):
         # of target vector i and its neighbor j (nb)
         # Note: (2*num_edges, 2*out_features) @ (2*out_features, 1) = (2*num_edges, 1)
         # --> squeeze result to get a 1D tensor of shape (2*num_edges, )
-        E_i_nb = (X_prime_concat_all @ self.S).squeeze()
+        E_i_nb = self.S(X_prime_concat_all).squeeze()
 
         # Apply leaky relu to get the raw attention scores
         raw_attention_scores = F.leaky_relu(E_i_nb)
@@ -346,6 +362,9 @@ class GraphAttentionConv(nn.Module):
 # ---------------- Mean Pooling
 class MeanPool(nn.Module):
     """Mean pooling layer."""
+
+    name = "MeanPool"
+
     def __init__(self):
         # Initialize the parent class
         super().__init__()
@@ -361,6 +380,9 @@ class MeanPool(nn.Module):
 # ---------------- Max Pooling
 class MaxPool(nn.Module):
     """Max pooling layer."""
+
+    name = "MaxPool"
+
     def __init__(self):
         super().__init__()
 
@@ -378,6 +400,8 @@ class GraphSumEdgeConv(nn.Module):
     """Transforms the edge features and adds the sum of the neighborhood 
     edge features to the corespoinding node features.
     """
+
+    name = "GraphSumEdgeConv"
 
     def __init__(self, in_features, out_features, activation=None):
         # Initialize the parent class
@@ -434,6 +458,8 @@ class GraphAttentionEdgeConv(nn.Module):
         - To each node, add the weighted sum of the edge features
 
     """
+
+    name = "GraphAttentionEdgeConv"
 
     def __init__(self, in_features, out_features, activation=None, local=False):
         # Initialize the parent class
